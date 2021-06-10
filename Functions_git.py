@@ -259,7 +259,6 @@ def plot_ivfc(area, loc): #plots IV curve and power density curve with the Pmax 
     plt.figtext(0.28,0.21,r'$P_{max} = $'+max_ws+r' $W/cm^2 at$ '+max_vs+r'$V$',size='large',weight='bold')
     #plt.title(r'$P_{max}$'+max_ws+r'W/cm$^2$ at')#+max_vs+'V')
 
-def plot_ivfcs(area, condition, loc): #plots IV curve and power density curve. Cant get this to work
     dta2csv(loc) #Converts and finds CSV then turns it into a dataframe
     loc_csv = loc.replace('.DTA','')+'.csv'
     file = csv.reader(open(loc_csv, "r",encoding='latin1'), delimiter="\t") #I honestly dk what is going on here, but it works
@@ -505,47 +504,6 @@ def plot_potentioDeg(area,FolderLoc,fit = 'yes'): #Doesnt quite work
     plt.tight_layout()
     plt.show()
 
-def plot_bias_potentio_holds(area,folder_loc):
-    files = os.listdir(folder_loc)
-    useful_files = []
-    #Making a list of all the files of potentiostatic holds during a bias test
-    for file in files:
-        if (file.find('PSTAT')!=-1):
-            useful_files.append(file)
-    #Getting the first time for reference
-    T0_stamp = gt.get_timestamp(os.path.join(folder_loc,'PSTAT_5bias.DTA')) #gets time stamp from first file
-    t0 = T0_stamp.strftime("%s") #Conveting Datetime to seconds from Epoch
-    #extracting the useful information from the files and placing it into a dataframe
-    dfs = [] #Initializing list of dfs
-    size = len(useful_files) #gets length of the useful files list
-    for i in range(0,size,1):
-        loc = os.path.join(folder_loc,useful_files[i]) #Creats a file path to the file of choice
-        dta2csv(loc) #convert DTA to a CSV
-        loc_csv = loc.replace('.DTA','')+'.csv' #access newly made file
-        data = csv.reader(open(loc_csv, "r",encoding='latin1'), delimiter="\t") #I honestly dk what is going on here
-        for row in data: #searches first column of each row in csv for "ZCURVE", then adds 1. This gives the right amount of rows to skip
-            if row[0] == 'CURVE':
-                skip = data.line_num+1
-                break
-        df = pd.read_csv(loc_csv,sep= '\t',skiprows=skip,encoding='latin1') #creat data frame for a file
-        start_time = gt.get_timestamp(loc).strftime("%s") #Find the start time of the file in s from epoch
-        df['s'] = df['s'] + int(start_time)
-        df_useful = df[['s','A','V vs. Ref.']]
-        dfs.append(df_useful)
-    cat_dfs = pd.concat(dfs)# (s) Combine all the dataframes in the file folder
-    cat_dfs['s'] = (cat_dfs['s']-int(t0))/3600 #(hrs) subtracting the start time to get Delta t and converting time from seconds to hours and
-    cat_dfs['A'] = cat_dfs['A'].div(area)
-    #plotting:
-    fig,ax = plt.subplots()
-    ax.set_xlabel('Time (hrs)')
-    ax.set_ylabel('Current Density (A/cm$^2$)')
-    ax.plot(cat_dfs['s'],-cat_dfs['A'],'.k')
-    #Plot extras
-    plt.axhline(y=0, color= 'r', linestyle='--')
-    plt.figtext(0.13,0.80,'Fuel Cell Mode',weight='bold')
-    plt.figtext(0.13,0.55,'Electrolysis Cell Mode',weight='bold')
-    plt.show()
-
 def plot_bias_potentio_holds2(area,folder_loc,voltage=True):
     files = os.listdir(folder_loc)
     useful_files = []
@@ -619,7 +577,6 @@ def plot_bias_potentio_holds2(area,folder_loc,voltage=True):
         plt.figtext(0.13,0.80,'Fuel Cell Mode',weight='bold')
         plt.figtext(0.13,0.55,'Electrolysis Cell Mode',weight='bold')
         plt.show()
-
 
 #/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
 "DRT functions - streamline the use of Jakes DRT modules"
@@ -708,71 +665,3 @@ def lnpo2(ohmic_asr,rp_asr,O2_conc): #Plots ln(1/ASRs) as a function of ln(PO2),
     plt.figtext(0.5,0.15,r'ASR$_\mathrm{P}$ Slope = '+mr_str,weight='bold')
     plt.tight_layout()
     plt.show()
-
-#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
-"Arrhenius plotting - could be improved"
-'These only work for half cells made using an excel file with a certain formatting'
-#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
-#both functions need to be called using the same template of excel file
-def Ah_plt_c(df): #plots conductivity arrhenius plot from a dataframe of the data (df) the cell area (ct) and cell thickness(ct)
-    #plotting:
-    x = df['1/K']
-    y = df['s*K/cm']
-    fig = plt.figure()
-    ax1 = fig.add_subplot(111)
-    ax2 = ax1.twiny()
-    new_tick_locations = x
-    plt.plot(x,y,'ko')
-    #Aligning the top axes tick marks with the bottom and converting to celcius
-    def tick_function(X):
-        V = (1000/X)-273
-        return ["%.0f" % z for z in V]
-    ax2.set_xticks(new_tick_locations)
-    ax2.set_xticklabels(tick_function(new_tick_locations))
-    #linear Fit:
-    m, b, r, p_value, std_err = scipy.stats.linregress(x, y)
-    plt.plot(x, m*x+b,'r')
-    #creating and formatting table:
-    row_labels = ['Intercept','Slope','r squared']
-    table_values = [[round(b,3)],[round(m,3)],[round(r**2,3)]]
-    table = plt.table(cellText=table_values,colWidths = [.2]*3,rowLabels=row_labels,loc = 'lower center',rowColours= ['lightblue','lightblue','lightblue'])
-    table.scale(1,1.6)
-    #Axis labels:
-    ax1.set_xlabel('1000/T (1/K)')
-    ax2.set_xlabel('Temperature (\u00B0C)')
-    ax1.set_ylabel('ln(\u03C3*T) (s*K/cm)')
-    plt.rc('font', size=16)
-    #Calculating and printing activation energy
-    k = 8.617*10**-5 #boltzmanns constant in Ev/K
-    Eact = round(m*k*(-1000),3) # this gives teh activation energy in eV
-    Eacts = f'{Eact}'
-    fig.text(0.67,0.37,r'$E_a$ ='+Eacts+'eV')
-    #print('Activation energy:',Eact,"eV")
-      
-def Ah_plt_p (df): #plots polarization resistance arrhenius plot from a dataframe of the data (df) the cell area (ct) and cell thickness(ct)
-    #plotting and setting axes:
-    x = df['1/k']
-    y = df['\g(W)*cm^2']
-    fig = plt.figure()
-    ax1 = fig.add_subplot(111)
-    ax2 = ax1.twiny() #creates a new x axis that is linked to the first y axis
-    new_tick_locs = x #np.array([1.114,1.145,1.179,1.22,1.253,1.294])
-    plt.yscale('log')
-    plt.plot(x,y,'ko')
-    def tick_function(X):
-        V = (1000/X)-273
-        return ["%.0f" % z for z in V]
-    ax2.set_xticks(new_tick_locs)
-    ax2.set_xticklabels(tick_function(new_tick_locs))
-    #linear Fit:
-    m, b, r, p_value, std_err = scipy.stats.linregress(x, np.log10(y))
-    plt.plot(x, 10**(m*x+b),'r')
-    #creating table:
-    row_labels = ['Intercept','Slope','r squared']
-    table_values = [[round(b,3)],[round(m,3)],[round(r**2,3)]]
-    table = plt.table(cellText=table_values,colWidths = [.2]*3,rowLabels=row_labels,loc = 'lower right',rowColours= ['gold','gold','gold'])
-    table.scale(1,1.6)
-    #Axis labels:
-    ax1.set_xlabel('1000/T (1/K)')
-    ax2.set_xlabel('Temperature (\u00B0C)')
-    ax1.set_ylabel('Rp ASR(\u03A9*$cm^2$)')
